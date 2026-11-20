@@ -69,39 +69,59 @@ const liveLinks: Record<Stage, [number, number, string]> = {
   confirm: [0, 1, "Решение"], response: [1, 0, "Ответ"],
 };
 
-type Arrow = { from: number; to: number; caption: string; color: string };
+type Arrow = { id: string; from: number; to: number; caption: string; color: string };
+const eventId = (event: TraceEvent) => `${event.operationId}:${event.sequence}`;
 
-function Diagram({ actors, arrow, title, caption, state }: {
-  actors: readonly Participant[]; arrow: Arrow; title: string; caption?: string; state?: TraceEvent["state"];
+function liveArrows(event: TraceEvent, actors: readonly Participant[]): Arrow[] {
+  const [from, to, label] = liveLinks[event.stage];
+  const id = eventId(event);
+  const arrow = { id, from, to, caption: event.stage === "tools/call" && event.tool ? event.tool : label,
+    color: event.state === "error" ? "#b54048" : tones[actors[to].tone] };
+  if (event.stage !== "tools/call" || event.state !== "ok") return [arrow];
+  return [arrow, { id: `${id}:result`, from: to, to: from, caption: "Результат MCP", color: tones[actors[from].tone] }];
+}
+
+function Diagram({ actors, arrows, title, caption, state }: {
+  actors: readonly Participant[]; arrows: Arrow[]; title: string; caption?: string; state?: TraceEvent["state"];
 }) {
   const lane = 100 / actors.length;
-  const left = (Math.min(arrow.from, arrow.to) + .5) * lane;
-  const right = (Math.max(arrow.from, arrow.to) + .5) * lane;
   const columns = { gridTemplateColumns: `repeat(${actors.length}, minmax(0, 1fr))` };
-  const reversed = arrow.from > arrow.to;
+  const current = arrows.at(-1);
 
   return (
     <div className="diagram">
+      <div className="diagram-text" aria-live={state ? "off" : "polite"}>
+        {state === "error" ? <CircleAlert size={17} className="red-ink" /> : <ArrowRight size={17} />}
+        <div><strong>{title}</strong>{caption && <p>{caption}</p>}</div>
+      </div>
       <div className="participants" style={columns}>
         {actors.map(({ label, compact, tone, Icon }, index) => (
-          <div key={label} className={`participant ${index === arrow.from || index === arrow.to ? "is-active" : ""}`}>
+          <div key={label} className={`participant ${index === current?.from || index === current?.to ? "is-active" : ""}`}>
             <span className={`role-icon ${tone}`}><Icon size={18} strokeWidth={1.7} /></span>
             <span className="participant-label">{label}</span>
             <span className="participant-compact" aria-label={label}>{compact}</span>
           </div>
         ))}
       </div>
-      <div className="lifelines" style={columns} aria-hidden="true">
-        {actors.map(actor => <span key={actor.label} />)}
-        <div className={`flow-arrow ${reversed ? "is-reverse" : ""}`}
-          key={`${arrow.from}-${arrow.to}-${arrow.caption}-${title}`}
-          style={{ left: `${left}%`, width: `${right - left}%`, color: arrow.color }}>
-          <code>{arrow.caption}</code>
+      <div className="diagram-timeline">
+        <div className="lifelines" style={columns} aria-hidden="true">
+          {actors.map(actor => <span key={actor.label} />)}
         </div>
-      </div>
-      <div className="diagram-text">
-        {state === "error" ? <CircleAlert size={17} className="red-ink" /> : <ArrowRight size={17} />}
-        <div><strong>{title}</strong>{caption && <p>{caption}</p>}</div>
+        <ol className="flow-steps" role="list" aria-label="Последовательность переходов">
+          {arrows.map(arrow => {
+            const start = Math.min(arrow.from, arrow.to);
+            const distance = Math.abs(arrow.to - arrow.from);
+            return (
+              <li key={arrow.id} className="flow-step" aria-current={arrow === current ? "step" : undefined}>
+                <span className="flow-step-label">{actors[arrow.from].label} → {actors[arrow.to].label}, {arrow.caption}</span>
+                <div className={`flow-arrow ${arrow.from > arrow.to ? "is-reverse" : ""}`} aria-hidden="true"
+                  style={{ left: `${(start + .5) * lane}%`, width: `${distance * lane}%`, color: arrow.color }}>
+                  <code>{arrow.caption}</code>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
       </div>
     </div>
   );
@@ -141,7 +161,6 @@ export function TracePanel({ events, defaultGuide }: { events: TraceEvent[]; def
   const operation = group && operations.includes(group) ? group : operations[0];
   const active = events.filter(event => event.operationId === operation);
   const mcpEvents = active.filter(event => ["initialize", "tools/list", "tools/call"].includes(event.stage));
-  const eventId = (event: TraceEvent) => `${event.operationId}:${event.sequence}`;
   const current = active.find(event => eventId(event) === selected) ?? active.at(-1);
   const explanation = guides[environment];
   const guide = explanation[step];
@@ -157,12 +176,11 @@ export function TracePanel({ events, defaultGuide }: { events: TraceEvent[]; def
     return () => window.clearTimeout(timer);
   }, [mode, playing, step, explanation.length]);
 
-  let [from, to, caption] = current ? liveLinks[current.stage] : [3, 4, ""];
-  if (current?.stage === "tools/call" && current.state !== "running") [from, to] = [to, from];
-  const arrow = mode === "guide"
-    ? { ...guide, color: tones[actors[guide.to].tone] }
-    : { from, to, caption: current?.stage === "tools/call" ? current.tool || caption : caption,
-        color: current?.state === "error" ? "#b54048" : tones[actors[to].tone] };
+  const arrows = mode === "guide"
+    ? explanation.slice(0, step + 1).map(({ from, to, caption }, index) => ({
+        id: `${environment}:${index}`, from, to, caption, color: tones[actors[to].tone],
+      }))
+    : active.filter(event => event.sequence <= (current?.sequence ?? 0)).flatMap(event => liveArrows(event, actors));
 
   const resultLabel = current?.error || (current?.durationMs === undefined
     ? "Выполняется" : `Завершено за ${current.durationMs} мс`);
@@ -192,10 +210,6 @@ export function TracePanel({ events, defaultGuide }: { events: TraceEvent[]; def
                 onClick={() => { setEnvironment("cloud"); changeStep(0); }}>Vercel + Supabase</button>
             </div>
           )}
-          {mode === "guide" || current
-            ? <Diagram actors={actors} arrow={arrow} title={mode === "guide" ? guide.title : current!.title}
-                caption={mode === "guide" ? guide.text : resultLabel} state={mode === "live" ? current?.state : undefined} />
-            : <div className="trace-empty">Обновите таблицу или отправьте команду, чтобы увидеть события.</div>}
           {mode === "guide" ? (
             <div className="flow-controls">
               <button className="icon-button" onClick={() => changeStep(0)} disabled={step === 0 && !playing} title="Сначала" aria-label="Сначала"><RotateCcw size={16} /></button>
@@ -212,6 +226,10 @@ export function TracePanel({ events, defaultGuide }: { events: TraceEvent[]; def
               {current && <button className="button secondary" onClick={() => setSelected(null)}>К последнему шагу</button>}
             </div>
           )}
+          {mode === "guide" || current
+            ? <Diagram actors={actors} arrows={arrows} title={mode === "guide" ? guide.title : current!.title}
+                caption={mode === "guide" ? guide.text : resultLabel} state={mode === "live" ? current?.state : undefined} />
+            : <div className="trace-empty">Обновите таблицу или отправьте команду, чтобы увидеть события.</div>}
         </article>
 
         <article className="panel journal">
