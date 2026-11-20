@@ -56,4 +56,4 @@ npm run dev
 - [Визуальные референсы](docs/DESIGN_REFERENCE.md)
 - [Журнал и пример фактического вызова](docs/MCP_TRACE.md)
 - [Отчёт о проверках](docs/TEST_REPORT.md)
-- [План развёртывания на Vercel](docs/DEPLOYMENT_VERCEL.md)
+- [Запуск на Vercel и хранение в Supabase](docs/DEPLOYMENT_VERCEL.md)
