@@ -98,10 +98,12 @@ export async function POST(request: NextRequest) {
   const origin = request.headers.get("origin");
   const localHost = /^(?:localhost|127\.0\.0\.1|\[::1\])(?::\d{1,5})?$/.test(host);
   const deploymentHost = process.env.VERCEL_URL;
-  const protectedHost = deploymentHost && deploymentHost !== process.env.VERCEL_PROJECT_PRODUCTION_URL && host === deploymentHost;
+  const productionHost = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  const publicProductionHost = process.env.VERCEL_ENV === "production" && host === productionHost;
+  const protectedHost = deploymentHost && deploymentHost !== productionHost && host === deploymentHost;
   const readOnly = cloud && !cloudWorkbookWritable();
-  if (cloud && (!protectedHost || (readOnly && process.env.EXCEL_CLOUD_READ_ONLY !== "1"))) {
-    return Response.json({ error: "Книга доступна на защищённом адресе развёртывания Vercel." }, { status: 403 });
+  if (cloud && ((!publicProductionHost && !protectedHost) || (readOnly && process.env.EXCEL_CLOUD_READ_ONLY !== "1"))) {
+    return Response.json({ error: "Книга доступна на основном адресе проекта и на адресе развёртывания Vercel." }, { status: 403 });
   }
   if (cloud && !process.env.MCP_HTTP_TOKEN?.trim()) {
     return Response.json({ error: "Облачная книга ожидает настройки доступа." }, { status: 503 });
