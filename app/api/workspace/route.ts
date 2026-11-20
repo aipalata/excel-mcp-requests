@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { rememberDecision, runAgent } from "@/lib/agent";
+import { cloudChatAllowed, cloudWorkbookWritable, takeCloudPlan } from "@/lib/cloud-workbook";
 import { mcpConfig, openAIConfig, workbookName, WorkbookError, WorkspaceError } from "@/lib/config";
 import type { Outcome, WireEvent } from "@/lib/contracts";
 import { withMcp } from "@/lib/mcp";
@@ -60,18 +61,23 @@ async function perform(action: Action, sessionId: string, trace: Trace): Promise
       snapshot(await readTickets(mcp)), signal), signal);
   }
 
+  const cloud = cloudWorkbookWritable();
   if (action.kind === "chat" && !openAIConfig().apiKey) {
-    throw new WorkspaceError("OpenAI не настроен. Добавьте API-ключ в .env.local и перезапустите приложение.");
+    throw new WorkspaceError(cloud ? "OpenAI не настроен в Vercel." :
+      "OpenAI не настроен. Добавьте API-ключ в .env.local и перезапустите приложение.");
   }
 
   return withTurn(sessionId, async () => {
     if (action.kind === "chat") {
+      if (cloud && !await cloudChatAllowed()) {
+        throw new WorkspaceError("Достигнут лимит запросов к чату. Попробуйте через минуту.");
+      }
       return withMcp(mcpConfig(), trace, mcp => runAgent(mcp, trace, {
         sessionId, requestId: action.requestId, message: action.message, signal,
       }), signal);
     }
 
-    const plan = consumePlan(action.planId, sessionId);
+    const plan = cloud ? await takeCloudPlan(sessionId, action.planId) : consumePlan(action.planId, sessionId);
     trace.mark("confirm", action.kind === "cancel" ? "План отменён" : "План подтверждён сервером",
       { ticket: plan.ticket.id, status: plan.status });
     if (action.kind === "cancel") {
@@ -93,7 +99,8 @@ export async function POST(request: NextRequest) {
   const localHost = /^(?:localhost|127\.0\.0\.1|\[::1\])(?::\d{1,5})?$/.test(host);
   const deploymentHost = process.env.VERCEL_URL;
   const protectedHost = deploymentHost && deploymentHost !== process.env.VERCEL_PROJECT_PRODUCTION_URL && host === deploymentHost;
-  if (cloud && (!protectedHost || process.env.EXCEL_CLOUD_READ_ONLY !== "1")) {
+  const readOnly = cloud && !cloudWorkbookWritable();
+  if (cloud && (!protectedHost || (readOnly && process.env.EXCEL_CLOUD_READ_ONLY !== "1"))) {
     return Response.json({ error: "Книга доступна на защищённом адресе развёртывания Vercel." }, { status: 403 });
   }
   if (cloud && !process.env.MCP_HTTP_TOKEN?.trim()) {
@@ -105,7 +112,7 @@ export async function POST(request: NextRequest) {
   }
   const payload = await boundedBody(request);
   if (!payload?.success) return Response.json({ error: "Проверьте тип и длину запроса." }, { status: 400 });
-  if (cloud && payload.data.kind !== "refresh") {
+  if (readOnly && payload.data.kind !== "refresh") {
     return Response.json({ error: "На Vercel доступно только чтение книги." }, { status: 403 });
   }
 
@@ -123,8 +130,8 @@ export async function POST(request: NextRequest) {
       void (async () => {
         try {
           send({
-            type: "config", openAI: !cloud && Boolean(openAIConfig().apiKey), file: workbookName(),
-            mode: process.env.MCP_MODE || "stdio", readOnly: cloud,
+            type: "config", openAI: !readOnly && Boolean(openAIConfig().apiKey), file: workbookName(),
+            mode: process.env.MCP_MODE || "stdio", readOnly,
           });
           const result = await perform(payload.data, sessionId, trace);
           send({ type: "result", result });

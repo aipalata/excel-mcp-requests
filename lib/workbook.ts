@@ -71,8 +71,10 @@ export function sameTicket(a: Ticket, b: Ticket) {
   return a.id === b.id && a.client === b.client && a.problem === b.problem && a.status === b.status;
 }
 
-export async function writeCells(mcp: ExcelMcp, at: string, rows: (string | number | null)[][], title?: string) {
-  await mcp.call("write_range", { sheet, at, rows }, title);
+export async function writeCells(
+  mcp: ExcelMcp, at: string, rows: (string | number | null)[][], title?: string, operationId?: string,
+) {
+  return mcp.call("write_range", { sheet, at, rows }, title, operationId);
 }
 
 export async function formatDemoWorkbook(mcp: ExcelMcp) {

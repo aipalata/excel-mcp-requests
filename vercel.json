@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
     "api/workbook_mcp.py": {
-      "maxDuration": 15,
+      "maxDuration": 20,
       "excludeFiles": "{data,docs,scripts,tests}/**"
     }
   }

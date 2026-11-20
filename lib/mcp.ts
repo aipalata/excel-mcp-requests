@@ -20,8 +20,19 @@ const titles: Record<ToolName, string> = {
 
 function createTransport(config: McpConfig) {
   if (config.mode === "http") {
+    let revision: string | null = null;
     return new StreamableHTTPClientTransport(config.url, {
       requestInit: { headers: config.token ? { Authorization: `Bearer ${config.token}` } : {} },
+      async fetch(url, init) {
+        const headers = new Headers(init?.headers);
+        if (revision && new URL(url).origin === config.url.origin) {
+          headers.set("x-workbook-revision", revision);
+        }
+        const response = await fetch(url, { ...init, headers });
+        const receivedRevision = response.headers.get("x-workbook-revision");
+        if (response.ok && receivedRevision) revision = receivedRevision;
+        return response;
+      },
     });
   }
   return new StdioClientTransport({
@@ -35,7 +46,7 @@ function createTransport(config: McpConfig) {
 export async function connectMcp(config: McpConfig, trace: Trace, signal?: AbortSignal) {
   const client = new Client({ name: "excel-requests", version: "1.0.0" });
   const transport = createTransport(config);
-  const options = { timeout: 8_000, signal };
+  const options = { timeout: config.mode === "http" ? 18_000 : 8_000, signal };
 
   async function close() {
     if (transport instanceof StreamableHTTPClientTransport && transport.sessionId) {
@@ -92,7 +103,7 @@ export async function connectMcp(config: McpConfig, trace: Trace, signal?: Abort
     file: config.file,
     catalog,
     close,
-    async call(tool: ToolName, args: Record<string, unknown>, title = titles[tool]): Promise<unknown> {
+    async call(tool: ToolName, args: Record<string, unknown>, title = titles[tool], operationId?: string): Promise<unknown> {
       if (!allowed.includes(tool) || !catalog.has(tool)) {
         throw new WorkspaceError(`Excel MCP не предоставил инструмент ${tool}.`);
       }
@@ -100,7 +111,10 @@ export async function connectMcp(config: McpConfig, trace: Trace, signal?: Abort
       const step = trace.start("tools/call", title, { tool, args: payload });
       try {
         const response = CallToolResultSchema.parse(
-          await client.callTool({ name: tool, arguments: payload }, CallToolResultSchema, options),
+          await client.callTool({
+            name: tool, arguments: payload,
+            ...(operationId && { _meta: { workbookOperation: operationId } }),
+          }, CallToolResultSchema, options),
         );
         if (response.isError) {
           step.error(response.content?.map(item => item.type === "text" ? item.text : "").join(" ") ||

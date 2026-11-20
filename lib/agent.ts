@@ -127,7 +127,7 @@ export async function runAgent(
       } catch (error) {
         const code = error instanceof OpenAI.APIError ? error.status : undefined;
         step.error(code ? `OpenAI вернул HTTP ${code}.` : "Ответ от OpenAI не получен.");
-        throw new WorkspaceError(code === 401 ? "OpenAI отклонил ключ. Проверьте .env.local."
+        throw new WorkspaceError(code === 401 ? `OpenAI отклонил ключ. Проверьте ${process.env.VERCEL ? "настройки Vercel" : ".env.local"}.`
           : code === 429 ? "OpenAI ограничил запрос. Проверьте лимиты и баланс проекта."
             : "OpenAI не ответил. Проверьте подключение, модель и настройки проекта.");
       }
