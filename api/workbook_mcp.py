@@ -4,7 +4,6 @@ import hashlib
 import json
 import os
 import re
-from asyncio import sleep
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from uuid import uuid4
@@ -79,21 +78,6 @@ async def upload_version(path: Path, revision: str) -> None:
         url = f"{base}/storage/v1/object/workbooks/{object_name(revision)}"
         response = await client.post(url, headers=headers, content=path.read_bytes())
         response.raise_for_status()
-
-
-async def publish_version(**parameters) -> dict:
-    for delay in (0.0, 0.25, 0.65, 1.0):
-        if delay:
-            await sleep(delay)
-        try:
-            return await workbook_state(**parameters)
-        except httpx2.HTTPStatusError as error:
-            if error.response.status_code != 400:
-                raise
-            detail = error.response.json()
-            if detail.get("code") != "22023" or detail.get("message") != "Workbook version was not uploaded" or delay == 1.0:
-                raise
-    raise RuntimeError("Workbook version was not published")
 
 
 def valid_write(args: dict) -> bool:
@@ -246,9 +230,9 @@ async def serve_mcp(scope, receive, send):
                 candidate = str(uuid4())
                 await upload_version(path, candidate)
                 ticket_id = args["rows"][0][0] if args["at"].startswith("A") else None
-                receipt = await publish_version(operation=operation, request_hash=request_hash,
-                                                expected=revision, candidate=candidate,
-                                                write_at=args["at"], ticket_id=ticket_id)
+                receipt = await workbook_state(operation=operation, request_hash=request_hash,
+                                               expected=revision, candidate=candidate,
+                                               write_at=args["at"], ticket_id=ticket_id)
                 if receipt.get("conflict"):
                     await tool_result(message, revision, error="Workbook changed. Refresh and retry.")(scope, receive, send)
                     return

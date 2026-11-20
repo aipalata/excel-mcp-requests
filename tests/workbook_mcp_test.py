@@ -65,7 +65,6 @@ class WorkbookMcpTests(unittest.IsolatedAsyncioTestCase):
         head = None
         versions = {None: FIXTURE.read_bytes()}
         receipts = {}
-        delayed = set()
 
         async def download(path, revision=None):
             path.write_bytes(versions[revision])
@@ -86,13 +85,6 @@ class WorkbookMcpTests(unittest.IsolatedAsyncioTestCase):
                 return {"pending": True}
             if head != expected:
                 return {"conflict": True}
-            if candidate not in delayed:
-                delayed.add(candidate)
-                request = httpx2.Request("POST", "https://example.test/rpc")
-                response = httpx2.Response(400, request=request, json={
-                    "code": "22023", "message": "Workbook version was not uploaded",
-                })
-                response.raise_for_status()
             self.assertIn(candidate, versions)
             head = candidate
             receipt = {"revision": candidate, "replayed": False, "at": write_at, "ticketId": ticket_id}

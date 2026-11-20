@@ -110,7 +110,7 @@ begin
         raise sqlstate '22023' using message = 'Workbook version was not uploaded';
     end if;
 
-    update requests_private.workbook set revision = candidate;
+    update requests_private.workbook set revision = candidate where singleton;
     insert into requests_private.write_receipts (operation_id, fingerprint, revision, write_at, ticket_id)
     values (operation, request_hash, candidate, write_at, ticket_id);
     delete from requests_private.write_receipts where expires_at < now();
