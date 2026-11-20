@@ -163,15 +163,16 @@ td { border-top: 1px solid #f0f0f2; overflow-wrap: anywhere; }
 .segmented { display: inline-flex; padding: 3px; gap: 3px; border-radius: 9px; background: #f2f2f5; border: 1px solid #eeeef2; }
 .segmented button { border: 1px solid transparent; padding: 5px 7px; border-radius: 6px; color: var(--muted); font-size: 10px; white-space: nowrap; }
 .segmented button[aria-pressed="true"] { border-color: #e8e8ed; background: #fff; color: var(--ink); box-shadow: 0 1px 2px #2626340c; }
+.guide-environments { align-self: flex-start; margin: 0 var(--trace-inset) 9px; }
 .diagram { margin-inline: var(--trace-inset); border-radius: 12px; border: 1px solid var(--line); overflow: hidden; }
-.participants { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); padding: 8px 0 0; }
+.participants { display: grid; padding: 8px 0 0; }
 .participant { display: grid; gap: 5px; justify-items: center; align-content: start; text-align: center; padding: 5px 1px 10px; color: #565963; font-size: 10px; line-height: 1.15; min-width: 0; }
 .participant-label { overflow-wrap: anywhere; }
 .participant-compact { display: none; }
 .participant.is-active { color: var(--ink); font-weight: 650; }
 .participant .role-icon { width: 34px; height: 34px; filter: saturate(.66); }
 .participant.is-active .role-icon { filter: none; box-shadow: 0 0 0 1px currentColor; }
-.lifelines { height: 81px; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); position: relative; background: linear-gradient(#fff, #fdfdfe); }
+.lifelines { height: 81px; display: grid; position: relative; background: linear-gradient(#fff, #fdfdfe); }
 .lifelines > span { justify-self: center; height: 100%; border-left: 1px dashed #dedee6; }
 .flow-arrow { position: absolute; top: 47%; height: 2px; background: currentColor; transform-origin: left center; animation: explain 220ms var(--ease-out) both; }
 .flow-arrow.is-reverse { transform-origin: right center; }

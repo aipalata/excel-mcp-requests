@@ -7,7 +7,7 @@ import {
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { statuses, type Outcome, type Plan, type Status, type Ticket, type TraceEvent, type WireEvent, type WorkspaceAction } from "@/lib/contracts";
 import { Hero } from "./hero";
-import { TracePanel } from "./trace-panel";
+import { TracePanel, type GuideEnvironment } from "./trace-panel";
 
 const examples = [
   { Icon: Plus, tone: "teal", name: "Добавить заявку", hint: "Новая запись в Excel", prompt: "Добавь заявку от Анны Смирновой: ноутбук сильно тормозит" },
@@ -74,7 +74,7 @@ const ticketCount = (count: number) => {
   return `${count} ${form === "one" ? "заявка" : form === "few" ? "заявки" : "заявок"}`;
 };
 
-export function Workspace() {
+export function Workspace({ defaultGuide }: { defaultGuide: GuideEnvironment }) {
   const [file, setFile] = useState("requests.xlsx");
   const [transport, setTransport] = useState("stdio");
   const [openAI, setOpenAI] = useState<boolean | null>(null);
@@ -315,7 +315,7 @@ export function Workspace() {
           </article>
         </section>
 
-        <TracePanel events={events} />
+        <TracePanel events={events} defaultGuide={defaultGuide} />
       </main>
 
       <footer className="site-footer shell"><span><Sparkles size={14} /> AI-агент «Заявки»</span><span>OpenAI · Model Context Protocol · Excel</span></footer>
