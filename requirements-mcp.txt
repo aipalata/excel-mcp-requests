@@ -1,0 +1,2 @@
+excel-mcp-server==2.3.2
+mcp==2.3.0
