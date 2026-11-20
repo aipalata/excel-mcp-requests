@@ -87,17 +87,27 @@ async function perform(action: Action, sessionId: string, trace: Trace): Promise
 }
 
 export async function POST(request: NextRequest) {
-  if (process.env.VERCEL) {
-    return Response.json({ error: "Для публикации настройте серверную авторизацию и постоянное состояние приложения." }, { status: 503 });
-  }
+  const cloud = Boolean(process.env.VERCEL);
   const host = request.headers.get("host") || "";
   const origin = request.headers.get("origin");
   const localHost = /^(?:localhost|127\.0\.0\.1|\[::1\])(?::\d{1,5})?$/.test(host);
-  if (!localHost || (origin && origin !== `http://${host}`) || request.headers.get("sec-fetch-site") === "cross-site") {
+  const deploymentHost = process.env.VERCEL_URL;
+  const protectedHost = deploymentHost && deploymentHost !== process.env.VERCEL_PROJECT_PRODUCTION_URL && host === deploymentHost;
+  if (cloud && (!protectedHost || process.env.EXCEL_CLOUD_READ_ONLY !== "1")) {
+    return Response.json({ error: "Книга доступна на защищённом адресе развёртывания Vercel." }, { status: 403 });
+  }
+  if (cloud && !process.env.MCP_HTTP_TOKEN?.trim()) {
+    return Response.json({ error: "Облачная книга ожидает настройки доступа." }, { status: 503 });
+  }
+  if ((!cloud && !localHost) || (origin && origin !== `${cloud ? "https" : "http"}://${host}`) ||
+      request.headers.get("sec-fetch-site") === "cross-site") {
     return Response.json({ error: "Запрос с другого источника отклонён." }, { status: 403 });
   }
   const payload = await boundedBody(request);
   if (!payload?.success) return Response.json({ error: "Проверьте тип и длину запроса." }, { status: 400 });
+  if (cloud && payload.data.kind !== "refresh") {
+    return Response.json({ error: "На Vercel доступно только чтение книги." }, { status: 403 });
+  }
 
   const existing = uuid.safeParse(request.cookies.get("requests_session")?.value);
   const sessionId = existing.success ? existing.data : randomUUID();
@@ -112,7 +122,10 @@ export async function POST(request: NextRequest) {
       const trace = tracer(operationId, event => send({ type: "trace", event }));
       void (async () => {
         try {
-          send({ type: "config", openAI: Boolean(openAIConfig().apiKey), file: workbookName(), mode: process.env.MCP_MODE || "stdio" });
+          send({
+            type: "config", openAI: !cloud && Boolean(openAIConfig().apiKey), file: workbookName(),
+            mode: process.env.MCP_MODE || "stdio", readOnly: cloud,
+          });
           const result = await perform(payload.data, sessionId, trace);
           send({ type: "result", result });
         } catch (error) {

@@ -46,7 +46,7 @@ export type Outcome = {
 export type WireEvent =
   | { type: "trace"; event: TraceEvent }
   | { type: "result"; result: Outcome }
-  | { type: "config"; openAI: boolean; file: string; mode: string };
+  | { type: "config"; openAI: boolean; file: string; mode: string; readOnly?: boolean };
 
 export type WorkspaceAction =
   | { kind: "refresh" }

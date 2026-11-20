@@ -78,6 +78,7 @@ export function Workspace() {
   const [file, setFile] = useState("requests.xlsx");
   const [transport, setTransport] = useState("stdio");
   const [openAI, setOpenAI] = useState<boolean | null>(null);
+  const [readOnly, setReadOnly] = useState(false);
   const [mcp, setMcp] = useState<boolean | null>(null);
   const [rows, setRows] = useState<Ticket[] | null>(null);
   const [readAt, setReadAt] = useState("");
@@ -137,6 +138,7 @@ export function Workspace() {
         if (event.type === "config") {
           sawConfig = true;
           setOpenAI(event.openAI);
+          setReadOnly(Boolean(event.readOnly));
           setFile(event.file);
           setTransport(event.mode);
         } else if (event.type === "trace") {
@@ -213,7 +215,7 @@ export function Workspace() {
               ))}
             </div>
             <div className="connections">
-              <div><span className={`signal ${openAI ? "good" : ""}`} /> <span>OpenAI</span><span>{openAI === null ? "Проверка" : openAI ? "Ключ задан" : "Не настроен"}</span></div>
+              <div><span className={`signal ${openAI ? "good" : ""}`} /> <span>OpenAI</span><span>{readOnly ? "Недоступен" : openAI === null ? "Проверка" : openAI ? "Ключ задан" : "Не настроен"}</span></div>
               <div><span className={`signal ${mcp ? "good" : ""}`} /> <span>MCP</span><code>{transport === "http" ? "HTTP" : "stdio"}</code></div>
               <div><FileSpreadsheet size={13} className="excel-icon" /> <span>Excel</span><code title={file}>{file}</code></div>
             </div>
@@ -250,7 +252,8 @@ export function Workspace() {
               {(busy === "chat" || busy === "confirm") && <div className="working"><LoaderCircle className="spinner" size={15} /> {busy === "chat" ? "Агент обрабатывает команду…" : "Excel сохраняет изменение…"}</div>}
             </div>
 
-            {openAI === false && <div className="key-state"><CircleAlert size={15} /><span><strong>OpenAI не настроен.</strong> Для отправки команды нужен API-ключ.</span></div>}
+            {readOnly ? <div className="key-state"><CircleAlert size={15} /><span><strong>Книга доступна для чтения.</strong> Чат в облаке пока отключён.</span></div>
+              : openAI === false && <div className="key-state"><CircleAlert size={15} /><span><strong>OpenAI не настроен.</strong> Для отправки команды нужен API-ключ.</span></div>}
             <form className="composer" onSubmit={submit}>
               <label htmlFor="command">Сообщение агенту</label>
               <textarea id="command" ref={input} placeholder="Напишите команду…" maxLength={1600} rows={2}

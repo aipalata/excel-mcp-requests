@@ -1,0 +1,13 @@
+[project]
+name = "excel-requests-mcp-runtime"
+version = "1.0.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "excel-mcp-server==2.3.2",
+  "mcp==2.3.0",
+  "httpx2==2.16.2",
+  "starlette==1.10.0",
+]
+
+[tool.uv]
+package = false
